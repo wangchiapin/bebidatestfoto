@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>饮料店冒险</title>
+    <script src="https://cdn.jsdelivr.net/npm/pinyin-pro@3.20.0/dist/index.js"></script>
+    <!-- ★ Firebase SDK (假設用 placeholder config，之後換成真實的) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getFirestore, collection, addDoc, query, orderBy, limit, getDocs }
+            from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        // ★★★ 請將下方替換成你自己的 Firebase 設定 ★★★
+        const firebaseConfig = {
+            apiKey:            "AIzaSyD2lxec6JTbERwFPGjDzriYzIH7o9IRWnw",
+            authDomain:        "tiendadebebidas-d75ac.firebaseapp.com",
+            projectId:         "tiendadebebidas-d75ac",
+            storageBucket:     "tiendadebebidas-d75ac.firebasestorage.app",
+            messagingSenderId: "1:947444542062:web:62e209f33cfc3ae12c547f",
+            appId:             "G-PGQZPYNBLX"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db  = getFirestore(app);
+
+        // Firestore collection 名稱：「drinkgame_scores」
+        window._FB = {
+            async saveScore(name, score, elapsed) {
+                try {
+                    await addDoc(collection(db, "drinkgame_scores"), {
+                        name,
+                        score,
+                        elapsed,
+                        createdAt: Date.now()
+                    });
+                    return true;
+                } catch(e) {
+                    console.error("Firebase 寫入失敗", e);
+                    return false;
+                }
+            },
+
+            async getLeaderboard() {
+                try {
+                    // 主排序：score 降序；同分則 elapsed 升序
+                    // Firestore 複合排序需要先在 Console 建立複合索引，詳見文末說明
+                    const q = query(
+                        collection(db, "drinkgame_scores"),
+                        orderBy("score",   "desc"),
+                        orderBy("elapsed", "asc"),
+                        limit(15)
+                    );
+                    const snap = await getDocs(q);
+                    return snap.docs.map(d => d.data());
+                } catch(e) {
+                    console.error("Firebase 讀取失敗", e);
+                    return [];
+                }
+            }
+        };
+    </script>
+
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            background: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            margin: 0;
+            font-family: 'Segoe UI', sans-serif;
+            padding-top: 50px;
+        }
+
+        /* ── 共用面板 ── */
+        .screen {
+            width: 800px;
+            background: #fff;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            padding: 40px;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 18px;
+        }
+        .screen.active { display: flex; }
+
+        /* ── 登入 ── */
+        #login-screen .game-logo { font-size: 56px; }
+        #login-screen h1 { font-size: 26px; font-weight: 700; color: #2c3e50; margin: 0; }
+        #login-screen p.subtitle { font-size: 14px; color: #7f8c8d; margin: 0; }
+
+        .input-group {
+            display: flex; flex-direction: column;
+            align-items: flex-start; gap: 8px;
+            width: 100%; max-width: 320px;
+        }
+        .input-group label { font-size: 14px; font-weight: 600; color: #34495e; }
+        .input-group input[type="text"] {
+            width: 100%; padding: 12px 16px; font-size: 16px;
+            border: 2px solid #bdc3c7; border-radius: 10px; outline: none;
+            transition: border-color 0.2s; font-family: inherit; color: #2c3e50;
+        }
+        .input-group input[type="text"]:focus { border-color: #e67e22; }
+        .error-msg { font-size: 13px; color: #e74c3c; min-height: 18px; }
+
+        .btn-primary {
+            padding: 14px 48px; background: #e67e22; color: #fff;
+            border: none; border-radius: 12px; font-size: 18px; font-weight: 700;
+            cursor: pointer; transition: background 0.2s, transform 0.15s; letter-spacing: 0.5px;
+        }
+        .btn-primary:hover { background: #d35400; transform: translateY(-2px); }
+
+        .flavor-text { font-size: 13px; color: #95a5a6; max-width: 340px; line-height: 1.7; text-align: center; }
+
+        /* ── 遊戲 ── */
+        #game-window {
+            width: 800px; min-height: 600px; background: #fff;
+            border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            display: none; flex-direction: column; padding: 20px;
+        }
+        #game-window.active { display: flex; }
+
+        .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .player-badge {
+            font-size: 13px; font-weight: 600; color: #7f8c8d;
+            background: #f8f9fa; border: 1px solid #e0e0e0;
+            padding: 4px 10px; border-radius: 20px;
+        }
+        #timer-display {
+            background: rgba(0,0,0,0.6); color: #fff;
+            padding: 5px 10px; border-radius: 5px; font-size: 14px; pointer-events: none;
+        }
+        #npc-dialogue { white-space: pre-wrap; line-height: 2.2; padding: 0 10px; font-size: 22px; }
+        ruby { ruby-position: over; }
+        ruby rt { color: #e67e22; font-size: 0.5em; }
+
+        #options-area {
+            flex: 1; display: grid; grid-template-columns: 1fr;
+            gap: 15px; padding: 30px;
+        }
+        button {
+            padding: 12px; background: #fff; border: 2px solid #34495e;
+            color: #34495e; cursor: pointer; font-size: 16px;
+            border-radius: 10px; transition: all 0.3s ease; font-weight: 600;
+        }
+        button:hover { background: #34495e; color: #fff; transform: translateY(-2px); }
+
+        /* ── 排行榜 ── */
+        #leaderboard-screen h2 { font-size: 22px; font-weight: 700; color: #2c3e50; margin: 0; }
+        #leaderboard-screen .lb-subtitle { font-size: 13px; color: #7f8c8d; }
+
+        .congrats-banner {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: #fff; border-radius: 12px; padding: 14px 28px;
+            font-size: 16px; font-weight: 700; text-align: center; width: 100%;
+        }
+        .no-rank-banner {
+            background: #ecf0f1; color: #7f8c8d;
+            border-radius: 12px; padding: 14px 28px;
+            font-size: 15px; font-weight: 600; text-align: center; width: 100%;
+        }
+
+        #lb-table {
+            width: 100%; border-collapse: collapse; font-size: 14px;
+        }
+        #lb-table thead tr { background: #34495e; color: #fff; }
+        #lb-table th, #lb-table td {
+            padding: 10px 14px; text-align: center; border-bottom: 1px solid #ecf0f1;
+        }
+        #lb-table tbody tr:nth-child(even) { background: #f8f9fa; }
+        #lb-table tbody tr.highlight-row {
+            background: #fef3e2 !important;
+            font-weight: 700;
+        }
+        .rank-medal { font-size: 18px; }
+        .lb-loading { color: #95a5a6; font-size: 14px; }
+
+        .btn-restart {
+            margin-top: 8px; padding: 12px 40px;
+            background: #2c3e50; color: #fff;
+            border: none; border-radius: 10px;
+            font-size: 16px; font-weight: 700; cursor: pointer;
+            transition: background 0.2s, transform 0.15s;
+        }
+        .btn-restart:hover { background: #1a252f; transform: translateY(-2px); }
+    </style>
+</head>
+<body>
+
+<!-- ── 登入畫面 ── -->
+<div id="login-screen" class="screen active">
+    <div class="game-logo">🧋</div>
+    <h1>饮料店冒险</h1>
+    <p class="subtitle">Aventura en la tienda de bebidas</p>
+    <div class="input-group">
+        <label for="player-name-input">你的名字 / Tu nombre</label>
+        <input type="text" id="player-name-input" placeholder="例：María、小明..."
+               maxlength="20" autocomplete="off"/>
+        <span class="error-msg" id="name-error"></span>
+    </div>
+    <button class="btn-primary" onclick="startGame()">开始游戏 ▶</button>
+    <p class="flavor-text">
+        帮 Ami 买一杯饮料，同时也别忘了自己要喝什么！<br>
+        ¡Ayuda a Ami a comprar una bebida y no olvides la tuya!
+    </p>
+</div>
+
+<!-- ── 遊戲畫面 ── -->
+<div id="game-window">
+    <div class="top-bar">
+        <div><button onclick="Game.togglePinyin()">Ver pinyin</button></div>
+        <span class="player-badge" id="player-badge"></span>
+        <div id="timer-display">Tiempo: 0 sec</div>
+    </div>
+    <div id="npc-dialogue"></div>
+    <div id="options-area"></div>
+</div>
+
+<!-- ── 排行榜畫面 ── -->
+<div id="leaderboard-screen" class="screen">
+    <div style="font-size:48px">🏆</div>
+    <h2>排行榜 Tabla de clasificación</h2>
+    <p class="lb-subtitle">前 15 名 · Top 15</p>
+    <div id="rank-banner"></div>
+    <p class="lb-loading" id="lb-loading">载入中 Cargando...</p>
+    <table id="lb-table" style="display:none">
+        <thead>
+            <tr>
+                <th>名次</th><th>玩家 Jugador</th>
+                <th>积分 Puntos</th><th>时间 Tiempo</th>
+            </tr>
+        </thead>
+        <tbody id="lb-body"></tbody>
+    </table>
+    <button class="btn-restart" onclick="location.reload()">重新开始 Reintentar 🔄</button>
+</div>
+
+<script>
+/* ══════════════════════════════════════
+   登入
+══════════════════════════════════════ */
+function startGame() {
+    const input = document.getElementById('player-name-input');
+    const errorEl = document.getElementById('name-error');
+    const name = input.value.trim();
+    if (!name) {
+        errorEl.textContent = '请输入你的名字 Por favor, ingresa tu nombre';
+        input.focus();
+        return;
+    }
+    errorEl.textContent = '';
+    Game.playerName = name;
+    document.getElementById('player-badge').textContent = '玩家：' + name;
+    document.getElementById('login-screen').classList.remove('active');
+    document.getElementById('game-window').classList.add('active');
+    Game.generateRandomOrder();
+    Game.render();
+}
+document.getElementById('player-name-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') startGame();
+});
+
+/* ══════════════════════════════════════
+   排行榜顯示（在 RESULT 狀態之後）
+══════════════════════════════════════ */
+async function showLeaderboard() {
+    // 切換畫面
+    document.getElementById('game-window').classList.remove('active');
+    document.getElementById('leaderboard-screen').classList.add('active');
+
+    const myName    = Game.playerName;
+    const myScore   = Game.score;
+    const myElapsed = Game.elapsedTime;
+
+    // 先把本次成績存到 Firebase
+    if (window._FB) {
+        await window._FB.saveScore(myName, myScore, myElapsed);
+    }
+
+    // 讀取排行榜
+    let rows = [];
+    if (window._FB) {
+        rows = await window._FB.getLeaderboard();
+    }
+
+    const loadingEl = document.getElementById('lb-loading');
+    const tableEl   = document.getElementById('lb-table');
+    const bodyEl    = document.getElementById('lb-body');
+    const bannerEl  = document.getElementById('rank-banner');
+
+    loadingEl.style.display = 'none';
+    tableEl.style.display   = 'table';
+
+    // 找出本次玩家的排名（依 score↓ elapsed↑）
+    let myRank = -1;
+    rows.forEach((r, i) => {
+        if (r.name === myName && r.score === myScore && r.elapsed === myElapsed) {
+            if (myRank === -1) myRank = i + 1; // 1-indexed
+        }
+    });
+
+    // 恭喜 / 落榜訊息
+    if (myRank !== -1) {
+        const medals = ['🥇','🥈','🥉'];
+        const medal  = medals[myRank - 1] || '🎉';
+        bannerEl.innerHTML = `<div class="congrats-banner">
+            ${medal} 恭喜！${myName}，你进入前15名了！第 ${myRank} 名！<br>
+            <small>¡Felicitaciones! Entraste al top 15. Puesto #${myRank}</small>
+        </div>`;
+    } else {
+        bannerEl.innerHTML = `<div class="no-rank-banner">
+            太可惜了，${myName}！再试一次吧！😢<br>
+            <small>¡Qué pena! ¡Inténtalo de nuevo!</small>
+        </div>`;
+    }
+
+    // 填入表格
+    bodyEl.innerHTML = '';
+    if (rows.length === 0) {
+        bodyEl.innerHTML = '<tr><td colspan="4" style="color:#95a5a6">暂无记录 Sin registros</td></tr>';
+    } else {
+        const medals = ['🥇','🥈','🥉'];
+        rows.forEach((r, i) => {
+            const rank    = i + 1;
+            const isMe    = (r.name === myName && r.score === myScore && r.elapsed === myElapsed && rank === myRank);
+            const rankStr = medals[i] ? `<span class="rank-medal">${medals[i]}</span>` : `#${rank}`;
+            const tr = document.createElement('tr');
+            if (isMe) tr.classList.add('highlight-row');
+            tr.innerHTML = `
+                <td>${rankStr}</td>
+                <td>${r.name}</td>
+                <td>${r.score} 分</td>
+                <td>${r.elapsed} 秒</td>
+            `;
+            bodyEl.appendChild(tr);
+        });
+    }
+}
+
+/* ══════════════════════════════════════
+   遊戲主體
+══════════════════════════════════════ */
+const Game = {
+    state: "START",
+    playerName: "你",
+    showPinyin: false,
+    startTime: null,
+    elapsedTime: 0,
+    timerInterval: null,
+
+    get N() { return this.playerName; },
+
+    startTimer() {
+        this.startTime = Date.now();
+        this.timerInterval = setInterval(() => {
+            this.elapsedTime = Math.floor((Date.now() - this.startTime) / 1000);
+            document.getElementById('timer-display').innerText = `时间: ${this.elapsedTime} 秒`;
+        }, 1000);
+    },
+
+    stopTimer() { clearInterval(this.timerInterval); },
+
+    togglePinyin() { this.showPinyin = !this.showPinyin; this.render(); },
+
+    formatText(text) {
+        if (!this.showPinyin) return text.replace(/\n/g, "<br>");
+        return [...text].map(char => {
+            if (char === "\n") return "<br>";
+            if (!/[\u4e00-\u9fff]/.test(char)) return char;
+            const py = pinyinPro.pinyin(char, { toneType: 'symbol' });
+            return `<ruby>${char}<rt>${py}</rt></ruby>`;
+        }).join('');
+    },
+
+    order: { 1: {}, 2: {} },
+    targetOrder: {},
+    tempCheck: "",
+    score: 100,
+    mistakes: 0,
+    mistakeLog: [],
+    lastCheckDone: false,
+
+    addMistake(reason) {
+        this.score -= 10;
+        this.mistakes += 1;
+        this.mistakeLog.push(reason);
+        if (this.mistakes >= 10) {
+            alert("错误次数过多，游戏失败！Demasiados errores. ¡Juego terminado!");
+            location.reload();
+        }
+    },
+
+    generateRandomOrder() {
+        const arr = list => list[Math.floor(Math.random() * list.length)];
+        this.targetOrder = {
+            drink:   arr(['奶茶','红茶','绿茶','乌龙茶']),
+            size:    arr(['大杯','中杯','小杯']),
+            sugar:   arr(['无糖','微糖','少糖','全糖']),
+            ice:     arr(['去冰','微冰','少冰','全冰']),
+            topping: '椰果'
+        };
+    },
+
+    getRandomDrinkName() {
+        const arr = list => list[Math.floor(Math.random() * list.length)];
+        return `${arr(['大杯','中杯','小杯'])}${arr(['奶茶','红茶','绿茶','乌龙茶'])}${arr(['无糖','微糖','少糖','全糖'])}${arr(['去冰','微冰','少冰','全冰'])}`;
+    },
+
+    getConfig() {
+        const N = this.N;
+        return {
+
+            "START": {
+                dialogue: () => `Ami：我好渴唷！可以帮我买一杯${this.targetOrder.size}${this.targetOrder.drink}${this.targetOrder.sugar}${this.targetOrder.ice}吗？我要加${this.targetOrder.topping}。你想喝什么？我请你！\n${N}：那……我要一杯大杯奶茶微糖去冰。`,
+                options: ['出发去饮料店...'],
+                next: () => { Game.startTimer(); Game.state = "TYPE_1"; }
+            },
+
+            "TYPE_1": {
+                dialogue: "Benjamin：您好，欢迎光临，今天想喝什么？",
+                options: ['奶茶','红茶','绿茶','乌龙茶'],
+                next: c => { Game.order[1].drink = c; Game.state = "SIZE_1"; }
+            },
+            "SIZE_1": {
+                dialogue: "Benjamin：大小呢？",
+                options: ['大杯','中杯','小杯'],
+                next: c => { Game.order[1].size = c; Game.state = "SUGAR_1"; }
+            },
+            "SUGAR_1": {
+                dialogue: "Benjamin：甜度呢？",
+                options: ['无糖','微糖','少糖','全糖'],
+                next: c => { Game.order[1].sugar = c; Game.state = "ICE_1"; }
+            },
+            "ICE_1": {
+                dialogue: "Benjamin：冰块？",
+                options: ['去冰','微冰','少冰','全冰'],
+                next: c => {
+                    Game.order[1].ice = c;
+                    const actual = `${Game.order[1].size}${Game.order[1].drink}${Game.order[1].sugar}${Game.order[1].ice}`;
+                    Game.tempCheck = Math.random() > 0.7 ? Game.getRandomDrinkName() : actual;
+                    Game.state = "CHECK_1";
+                }
+            },
+            "CHECK_1": {
+                dialogue: () => `Benjamin：跟您确认一下，请问是 ${Game.tempCheck} 吗？`,
+                options: ['对','不对'],
+                next: c => {
+                    const actual = `${Game.order[1].size}${Game.order[1].drink}${Game.order[1].sugar}${Game.order[1].ice}`;
+                    if (c === '对') {
+                        if (Game.tempCheck === actual) { Game.state = "TYPE_2"; }
+                        else {
+                            Game.addMistake("没看清楚店员跟你确认的内容。No leíste bien la confirmación del dependiente.");
+                            alert("Benjamin：咦？这杯明明不是您点的耶！我帮您重新点一次吧！");
+                            Game.state = "TYPE_1";
+                        }
+                    } else {
+                        if (Game.tempCheck !== actual) { Game.state = "CORRECT_1"; }
+                        else {
+                            Game.addMistake("店员没确认错，但你却说不对。El dependiente confirmó correctamente, pero tú dijiste que era incorrecto.");
+                            Game.state = "TYPE_1";
+                        }
+                    }
+                }
+            },
+            "CORRECT_1": {
+                dialogue: "Benjamin：抱歉抱歉，那您点的是...？",
+                options: () => {
+                    const correct = `${Game.order[1].size}${Game.order[1].drink}${Game.order[1].sugar}${Game.order[1].ice}`;
+                    let opts = [correct, Game.getRandomDrinkName(), Game.getRandomDrinkName()];
+                    for (let i = opts.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [opts[i], opts[j]] = [opts[j], opts[i]];
+                    }
+                    return opts;
+                },
+                next: c => {
+                    const correct = `${Game.order[1].size}${Game.order[1].drink}${Game.order[1].sugar}${Game.order[1].ice}`;
+                    if (c === correct) { Game.state = "TYPE_2"; }
+                    else {
+                        Game.addMistake("在修正阶段依然点选错误饮料。Incluso en la fase de corrección, elegiste la bebida incorrecta.");
+                        Game.state = "TYPE_1";
+                    }
+                }
+            },
+
+            "TYPE_2": {
+                dialogue: () => `好的，一杯${Game.order[1].size}${Game.order[1].drink}${Game.order[1].sugar}${Game.order[1].ice}，请问还要点什么呢？`,
+                options: ['奶茶','红茶','绿茶','乌龙茶'],
+                next: c => { Game.order[2].drink = c; Game.state = "SIZE_2"; }
+            },
+            "SIZE_2": {
+                dialogue: "Benjamin：大小呢？",
+                options: ['大杯','中杯','小杯'],
+                next: c => { Game.order[2].size = c; Game.state = "SUGAR_2"; }
+            },
+            "SUGAR_2": {
+                dialogue: "Benjamin：甜度？",
+                options: ['无糖','微糖','少糖','全糖'],
+                next: c => { Game.order[2].sugar = c; Game.state = "ICE_2"; }
+            },
+            "ICE_2": {
+                dialogue: "Benjamin：冰块？",
+                options: ['去冰','微冰','少冰','全冰'],
+                next: c => { Game.order[2].ice = c; Game.state = "TOPPING_2"; }
+            },
+            "TOPPING_2": {
+                dialogue: "Benjamin：需要加料吗？",
+                options: ['珍珠','椰果','布丁','不加料'],
+                next: c => {
+                    if (c === '椰果') Game.state = "NO_COCONUT";
+                    else { Game.order[2].topping = c; Game.state = "PAYMENT"; }
+                }
+            },
+            "NO_COCONUT": {
+                dialogue: "Benjamin：不好意思，我们椰果卖完了欸！",
+                options: ['打电话给Ami','直接选择不加料'],
+                next: c => {
+                    if (c === '打电话给Ami') Game.state = "CALL_AMI";
+                    else { Game.order[2].topping = '不加料'; Game.state = "PAYMENT"; }
+                }
+            },
+            "CALL_AMI": {
+                dialogue: () => `${N}：Ami，没有椰果了。\nAmi：是喔，那我要加珍珠！`,
+                options: ['回去跟店员说改加珍珠'],
+                next: () => { Game.targetOrder.topping = '珍珠'; Game.state = "INFORM_BENJAMIN"; }
+            },
+            "INFORM_BENJAMIN": {
+                dialogue: () => `${N}：不好意思，因为椰果没了，我要改成加珍珠。\nBenjamin：好的，没问题！`,
+                options: ['继续结账'],
+                next: () => { Game.order[2].topping = '珍珠'; Game.state = "PAYMENT"; }
+            },
+
+            "PAYMENT": {
+                dialogue: "Benjamin：这样一共85元喔。",
+                options: ['拿出100元','拿出50元'],
+                next: c => { if (c !== '拿出50元') Game.state = "CHANGE"; }
+            },
+            "CHANGE": {
+                dialogue: "Benjamin：好的，收您100元，找您10元。",
+                options: ['好，谢谢','不好意思，你找错了'],
+                next: c => {
+                    if (c === '不好意思，你找错了') { Game.state = "APOLOGIZE"; }
+                    else {
+                        Game.addMistake("没发现店员找错钱（应找15元，玩家却接受了10元）。El dependiente te dio mal el cambio (debían ser 15), pero no te diste cuenta.");
+                        Game.state = "FINISH_DRINK";
+                    }
+                }
+            },
+            "APOLOGIZE": {
+                dialogue: "Benjamin：啊！抱歉抱歉～我少找5元，给您15元。",
+                options: ['没关系','干！你到底在干嘛？'],
+                next: c => {
+                    if (c === '干！你到底在干嘛？')
+                        Game.addMistake("对店员态度不好，没有礼貌。Mostraste una mala actitud hacia el dependiente y fuiste poco respetuoso.");
+                    Game.state = "FINISH_DRINK";
+                    Game.render();
+                }
+            },
+            "FINISH_DRINK": {
+                dialogue: "Benjamin：饮料好了唷！谢谢光临！",
+                options: ['回家'],
+                next: () => { Game.stopTimer(); Game.state = "END"; }
+            },
+
+            "END": {
+                dialogue: () => {
+                    const t = Game.targetOrder, o2 = Game.order[2], p = Game.order[1];
+                    const isCorrectAmi = o2.drink===t.drink && o2.size===t.size &&
+                                         o2.sugar===t.sugar && o2.ice===t.ice && o2.topping===t.topping;
+                    const isCorrectPlayer = p.size==='大杯' && p.drink==='奶茶' && p.sugar==='微糖' && p.ice==='去冰';
+
+                    if (!isCorrectAmi) { Game.addMistake("饮料内容跟 Ami 最后点的不一样。La bebida entregada no coincide con la última elección de Ami."); Game.lastCheckDone = true; }
+                    if (!isCorrectPlayer) Game.addMistake("你忘记自己原本要点『大杯奶茶微糖去冰』。Olvidaste tu pedido original: té con leche grande, poco azúcar y sin hielo.");
+
+                    const amiResult = isCorrectAmi
+                        ? `Ami：哇！谢谢你，${N}！我请客！`
+                        : `Ami：${N}，你买错了吧！我说我要${t.size}${t.drink}${t.sugar}${t.ice}加${t.topping}，\n但是你买成${o2.size}${o2.drink}${o2.sugar}${o2.ice}加${o2.topping}！不爽欸！`;
+                    const playerResult = isCorrectPlayer ? '' : `\n\n（${N}，你不是要买大杯奶茶微糖去冰吗？你自己的好像也买错了……）`;
+                    return `回到家，把饮料拿给Ami……\n\n${amiResult}${playerResult}`;
+                },
+                options: ['查看任务结果 Ver resultado'],
+                next: () => { Game.state = "RESULT"; Game.render(); }
+            },
+
+            "RESULT": {
+                dialogue: () => {
+                    let msg = `【 任务成果报告 Resultados de la misión 】\n------------------------------\n玩家 Jugador：${N}\n最终积分 Puntos finales：${Game.score} 分\n错误次数 Errores：${Game.mistakes} 次\n游戏耗时 Duración：${Game.elapsedTime} 秒\n\n扣分原因 Causa de penalización：`;
+                    if (Game.mistakeLog.length === 0) {
+                        msg += "\n（无扣分！¡Sin errores！🎉）";
+                    } else {
+                        Game.mistakeLog.forEach((r, i) => { msg += `\n${i+1}. ${r} (-10分)`; });
+                    }
+                    return msg;
+                },
+                // 「查看排行榜」按鈕，不走 handleChoice，直接呼叫 showLeaderboard
+                options: ['查看排行榜 Ver clasificación 🏆'],
+                next: () => { showLeaderboard(); }
+            }
+        };
+    },
+
+    handleChoice(choice) {
+        const cfg = this.getConfig()[this.state];
+        if (this.state === 'PAYMENT' && choice === '拿出50元') {
+            this.addMistake("金额不足（你要付85元）。Monto insuficiente (debes pagar 85).");
+            document.getElementById("npc-dialogue").innerHTML = this.formatText("Benjamin：钱不够唷！还差35元。");
+            return;
+        }
+        cfg.next(choice);
+        this.render();
+    },
+
+    render() {
+        const cfg = this.getConfig()[this.state];
+        if (!cfg) { console.error("狀態錯誤：" + this.state); return; }
+        const rawText = typeof cfg.dialogue === 'function' ? cfg.dialogue() : cfg.dialogue;
+        document.getElementById("npc-dialogue").innerHTML = this.formatText(rawText);
+        const area = document.getElementById('options-area');
+        area.innerHTML = "";
+        const opts = typeof cfg.options === 'function' ? cfg.options() : cfg.options;
+        opts.forEach(opt => {
+            const b = document.createElement('button');
+            b.innerHTML = this.formatText(opt);
+            b.onclick = () => this.handleChoice(opt);
+            area.appendChild(b);
+        });
+    }
+};
+</script>
+</body>
+</html>
