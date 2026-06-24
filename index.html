@@ -211,6 +211,8 @@
 <!-- ── 遊戲畫面 ── -->
 <div id="game-window">
     <div class="top-bar">
+        <div id="npc-avatar-area" style="text-align: center; margin: 10px 0;">
+            <img id="npc-avatar" src="default.png" style="width: 150px; height: 150px; object-fit: contain; border-radius: 10px;">
         <div><button onclick="Game.togglePinyin()">Ver pinyin</button></div>
         <span class="player-badge" id="player-badge"></span>
         <div id="timer-display">Tiempo: 0 sec</div>
@@ -374,7 +376,18 @@ const Game = {
             return `<ruby>${char}<rt>${py}</rt></ruby>`;
         }).join('');
     },
-
+    
+     NPC_IMAGES: {
+        "START": "start.png",
+        "TYPE_1": "ordering.png",
+        "CORRECT_1": "correct.png",
+        "PAYMENT": "payment.png",
+        "NO_COCONUT": "nococonut.png",
+        "APOLOGIZE": "oops.png",
+        "FINISH_DRINK": "finishdrink.png",
+        "END": "end1.png"
+    },
+    
     order: { 1: {}, 2: {} },
     targetOrder: {},
     tempCheck: "",
@@ -616,6 +629,12 @@ const Game = {
     render() {
         const cfg = this.getConfig()[this.state];
         if (!cfg) { console.error("狀態錯誤：" + this.state); return; }
+        const imgEl = document.getElementById('npc-avatar');
+        const newSrc = NPC_IMAGES[this.state] || 'default.png'; // 找不到則使用預設
+        if (imgEl.src !== newSrc) {
+            imgEl.src = newSrc;
+        }
+        
         const rawText = typeof cfg.dialogue === 'function' ? cfg.dialogue() : cfg.dialogue;
         document.getElementById("npc-dialogue").innerHTML = this.formatText(rawText);
         const area = document.getElementById('options-area');
