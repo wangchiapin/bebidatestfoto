@@ -133,9 +133,16 @@
             background: rgba(0,0,0,0.6); color: #fff;
             padding: 5px 10px; border-radius: 5px; font-size: 14px; pointer-events: none;
         }
+        
         #npc-dialogue { white-space: pre-wrap; line-height: 2.2; padding: 0 10px; font-size: 22px; }
         ruby { ruby-position: over; }
         ruby rt { color: #e67e22; font-size: 0.5em; }
+
+        #npc-avatar-area {
+            width: 100%; /* 強制佔滿寬度 */
+            display: flex;
+            justify-content: center; /* 讓圖片在區塊內水平置中 */   
+        }
 
         #options-area {
             flex: 1; display: grid; grid-template-columns: 1fr;
@@ -209,14 +216,17 @@
 </div>
 
 <!-- ── 遊戲畫面 ── -->
-<div id="game-window">
+<div id="game-window" class="active">
     <div class="top-bar">
-        <div id="npc-avatar-area" style="text-align: center; margin: 10px 0;">
-            <img id="npc-avatar" src="" style="width: 150px; height: 150px; object-fit: contain; border-radius: 10px;">
         <div><button onclick="Game.togglePinyin()">Ver pinyin</button></div>
         <span class="player-badge" id="player-badge"></span>
         <div id="timer-display">Tiempo: 0 sec</div>
     </div>
+
+    <div id="npc-avatar-area" style="text-align: center; margin: 15px 0;">
+        <img id="npc-avatar" src="" style="width: 150px; height: 150px; object-fit: contain; border-radius: 10px;">
+    </div>
+
     <div id="npc-dialogue"></div>
     <div id="options-area"></div>
 </div>
