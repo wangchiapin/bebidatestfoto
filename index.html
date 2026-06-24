@@ -630,7 +630,7 @@ const Game = {
         const cfg = this.getConfig()[this.state];
         if (!cfg) { console.error("狀態錯誤：" + this.state); return; }
         const imgEl = document.getElementById('npc-avatar');
-        const newSrc = NPC_IMAGES[this.state] || 'default.png'; // 找不到則使用預設
+        const newSrc = this.NPC_IMAGES[this.state] || 'images/default.png'; // 找不到則使用預設
         if (imgEl.src !== newSrc) {
             imgEl.src = newSrc;
         }
