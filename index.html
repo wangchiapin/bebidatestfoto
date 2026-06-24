@@ -407,7 +407,6 @@ const Game = {
         "CHANGE": "images/payment.png",
         "APOLOGIZE": "images/oops.png",
         "FINISH_DRINK": "images/finishdrink.png",
-        "END": "images/end1.png",
         "RESULT": "images/result.png"
     },
     
@@ -653,11 +652,24 @@ const Game = {
         const cfg = this.getConfig()[this.state];
         if (!cfg) { console.error("狀態錯誤：" + this.state); return; }
         const imgEl = document.getElementById('npc-avatar');
-        const newSrc = this.NPC_IMAGES[this.state] || 'default.png'; // 找不到則使用預設
-        if (imgEl.src !== newSrc) {
-            imgEl.src = newSrc;
+        if (imgEl) {
+            let newSrc = this.NPC_IMAGES[this.state];
+            if (this.state === "END") {
+            const t = this.targetOrder;
+            const o2 = this.order[2];
+            // 判斷飲料是否正確 (這裡的邏輯要與你的 END 邏輯一致)
+            const isCorrectAmi = o2.drink === t.drink && o2.size === t.size &&
+                                 o2.sugar === t.sugar && o2.ice === t.ice && o2.topping === t.topping;
+            
+            newSrc = isCorrectAmi ? 'images/end1.png' : 'images/end2.png';
         }
-        
+            if (newSrc) {
+            imgEl.src = newSrc;
+            imgEl.style.display = 'block';
+        } else {
+            imgEl.style.display = 'none';
+        }
+    }        
         const rawText = typeof cfg.dialogue === 'function' ? cfg.dialogue() : cfg.dialogue;
         document.getElementById("npc-dialogue").innerHTML = this.formatText(rawText);
         const area = document.getElementById('options-area');
