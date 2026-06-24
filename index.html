@@ -378,14 +378,14 @@ const Game = {
     },
     
      NPC_IMAGES: {
-        "START": "start.png",
-        "TYPE_1": "ordering.png",
-        "CORRECT_1": "correct.png",
-        "PAYMENT": "payment.png",
-        "NO_COCONUT": "nococonut.png",
-        "APOLOGIZE": "oops.png",
-        "FINISH_DRINK": "finishdrink.png",
-        "END": "end1.png"
+        "START": "images/start.png",
+        "TYPE_1": "images/ordering.png",
+        "CORRECT_1": "images/correct.png",
+        "PAYMENT": "images/payment.png",
+        "NO_COCONUT": "images/nococonut.png",
+        "APOLOGIZE": "images/oops.png",
+        "FINISH_DRINK": "images/finishdrink.png",
+        "END": "images/end1.png"
     },
     
     order: { 1: {}, 2: {} },
@@ -630,7 +630,7 @@ const Game = {
         const cfg = this.getConfig()[this.state];
         if (!cfg) { console.error("狀態錯誤：" + this.state); return; }
         const imgEl = document.getElementById('npc-avatar');
-        const newSrc = this.NPC_IMAGES[this.state] || 'images/default.png'; // 找不到則使用預設
+        const newSrc = this.NPC_IMAGES[this.state] || 'default.png'; // 找不到則使用預設
         if (imgEl.src !== newSrc) {
             imgEl.src = newSrc;
         }
